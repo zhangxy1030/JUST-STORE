@@ -1,1 +1,1370 @@
-omitted
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>21天表达系统打卡</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    background: #ededed;
+    color: #191919;
+    max-width: 420px;
+    margin: 0 auto;
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* ===== 状态栏模拟 ===== */
+  .status-bar {
+    height: 44px;
+    background: #ededed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  /* ===== 胶囊按钮 ===== */
+  .capsule {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 87px;
+    height: 32px;
+    background: rgba(0,0,0,0.06);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    pointer-events: none;
+  }
+  .capsule .dot { width: 5px; height: 5px; border-radius: 50%; background: #888; }
+
+  /* ===== 页面容器 ===== */
+  .page { display: none; padding: 12px 16px 100px; }
+  .page.active { display: block; }
+
+  /* ===== 卡片 ===== */
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  /* ===== Round 标签 ===== */
+  .round-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .round-badge.r1 { background: #e8f5e9; color: #2e7d32; }
+  .round-badge.r2 { background: #fff3e0; color: #e65100; }
+
+  /* ===== Day 选择器 ===== */
+  .day-selector {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .day-selector .label { font-size: 14px; color: #888; }
+  .day-nav {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .day-nav button {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: #07c160;
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .day-nav button:disabled { background: #ccc; cursor: not-allowed; }
+  .day-nav .current { font-size: 18px; font-weight: 700; min-width: 60px; text-align: center; }
+
+  /* ===== 任务卡片 ===== */
+  .task-card { margin-bottom: 10px; }
+  .task-card .task-header {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .task-card .task-phase {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 12px;
+  }
+
+  /* ===== 打卡项 ===== */
+  .check-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 12px 0;
+    border-top: 1px solid #f5f5f5;
+    cursor: pointer;
+  }
+  .check-item:first-of-type { border-top: none; }
+  .check-circle {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid #ccc;
+    margin-right: 12px;
+    margin-top: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .check-item.done .check-circle {
+    background: #07c160;
+    border-color: #07c160;
+  }
+  .check-item.done .check-circle::after {
+    content: '';
+    width: 6px;
+    height: 10px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    margin-top: -2px;
+  }
+  .check-text { flex: 1; font-size: 15px; line-height: 1.5; }
+  .check-item.done .check-text { color: #999; text-decoration: line-through; }
+
+  /* ===== 计时器 ===== */
+  .timer-card {
+    text-align: center;
+  }
+  .timer-display {
+    font-size: 48px;
+    font-weight: 200;
+    font-variant-numeric: tabular-nums;
+    margin: 12px 0;
+    color: #07c160;
+  }
+  .timer-display.running { color: #07c160; }
+  .timer-display.finished { color: #e65100; }
+  .timer-btn {
+    display: inline-block;
+    padding: 10px 32px;
+    border-radius: 24px;
+    border: none;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .timer-btn.start { background: #07c160; color: #fff; }
+  .timer-btn.stop { background: #f44336; color: #fff; }
+  .timer-btn.reset { background: #f0f0f0; color: #666; }
+  .timer-hint { font-size: 13px; color: #999; margin-top: 8px; }
+
+  /* ===== 进度页 ===== */
+  .progress-overview { text-align: center; }
+  .progress-ring {
+    width: 140px;
+    height: 140px;
+    margin: 16px auto;
+    position: relative;
+  }
+  .progress-ring svg { transform: rotate(-90deg); }
+  .progress-ring .ring-bg { fill: none; stroke: #f0f0f0; stroke-width: 8; }
+  .progress-ring .ring-fill { fill: none; stroke: #07c160; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 0.5s; }
+  .progress-ring .ring-text {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+  }
+  .progress-ring .ring-percent { font-size: 32px; font-weight: 700; color: #07c160; }
+  .progress-ring .ring-label { font-size: 12px; color: #888; }
+
+  .progress-stats {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 8px;
+  }
+  .stat-box { text-align: center; }
+  .stat-num { font-size: 24px; font-weight: 700; }
+  .stat-num.r1 { color: #2e7d32; }
+  .stat-num.r2 { color: #e65100; }
+  .stat-label { font-size: 12px; color: #888; }
+
+  /* ===== 日历网格 ===== */
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    margin-top: 12px;
+  }
+  .cal-day {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    position: relative;
+  }
+  .cal-day .day-num { font-size: 14px; }
+  .cal-day.pending { background: #f5f5f5; color: #bbb; }
+  .cal-day.current { background: #e3f2fd; color: #1976d2; border: 2px solid #1976d2; }
+  .cal-day.done { background: #e8f5e9; color: #2e7d32; }
+  .cal-day.partial { background: #fff8e1; color: #f57c00; }
+  .cal-day .check-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    margin-top: 2px;
+  }
+  .cal-day.done .check-dot { background: #07c160; }
+  .cal-day.partial .check-dot { background: #f57c00; }
+
+  /* ===== 灵感库 ===== */
+  .inspiration-add {
+    margin-bottom: 12px;
+  }
+  .inspiration-add textarea {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 80px;
+    margin-bottom: 8px;
+  }
+  .inspiration-add textarea:focus { outline: none; border-color: #07c160; }
+  .inspiration-fields {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .inspiration-fields select, .inspiration-fields input {
+    flex: 1;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .inspiration-fields select:focus, .inspiration-fields input:focus { outline: none; border-color: #07c160; }
+  .btn-primary {
+    background: #07c160;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+  }
+  .inspiration-item {
+    background: #fff;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+    position: relative;
+  }
+  .inspiration-item .ins-type {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .ins-type.opinion { background: #e3f2fd; color: #1565c0; }
+  .ins-type.expression { background: #fce4ec; color: #c62828; }
+  .ins-type.spark { background: #fff3e0; color: #e65100; }
+  .inspiration-item .ins-content { font-size: 14px; line-height: 1.6; margin-bottom: 6px; }
+  .inspiration-item .ins-meta { font-size: 12px; color: #999; display: flex; justify-content: space-between; }
+  .inspiration-item .ins-del {
+    position: absolute;
+    top: 12px; right: 12px;
+    color: #ccc;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .ins-actions { text-align: right; margin-top: 6px; }
+  .ins-dl {
+    border: 1px solid #07c160;
+    color: #07c160;
+    background: #fff;
+    border-radius: 6px;
+    padding: 3px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .ins-dl:hover { background: #07c160; color: #fff; }
+  .btn-download {
+    border: 1px solid #07c160;
+    background: #07c160;
+    color: #fff;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-download:hover { background: #06ad56; }
+  .btn-cancel {
+    border: 1px solid #ccc;
+    background: #fff;
+    color: #666;
+    border-radius: 8px;
+    padding: 10px 0;
+    font-size: 15px;
+    width: 80px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-cancel:hover { background: #f5f5f5; }
+  .ins-edit {
+    border: 1px solid #576b95;
+    color: #576b95;
+    background: #fff;
+    border-radius: 6px;
+    padding: 3px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-right: 6px;
+    transition: all 0.2s;
+  }
+  .ins-edit:hover { background: #576b95; color: #fff; }
+  .empty-hint {
+    text-align: center;
+    padding: 40px 20px;
+    color: #bbb;
+    font-size: 14px;
+  }
+
+  /* ===== 底部Tab ===== */
+  .tab-bar {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 420px;
+    background: #fff;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    height: 56px;
+    z-index: 100;
+  }
+  .tab-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #999;
+    font-size: 11px;
+    gap: 2px;
+  }
+  .tab-item.active { color: #07c160; }
+  .tab-item svg { width: 24px; height: 24px; }
+
+  /* ===== 提示Toast ===== */
+  .toast {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.75);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ===== Day详情弹窗 ===== */
+  .modal-mask {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 200;
+    display: none;
+    align-items: flex-end;
+  }
+  .modal-mask.show { display: flex; }
+  .modal-sheet {
+    background: #fff;
+    border-radius: 16px 16px 0 0;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 20px 16px 30px;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  .modal-sheet .modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .modal-sheet .modal-close {
+    float: right;
+    font-size: 20px;
+    color: #999;
+    cursor: pointer;
+  }
+  .modal-detail-item {
+    padding: 8px 0;
+    font-size: 14px;
+    line-height: 1.6;
+    border-bottom: 1px solid #f5f5f5;
+  }
+  .modal-detail-item:last-child { border-bottom: none; }
+  .modal-detail-item .detail-label { color: #888; font-size: 12px; margin-bottom: 2px; }
+
+  /* ===== Round 2 步骤 ===== */
+  .step-flow {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+  }
+  .step-pill {
+    flex-shrink: 0;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #f5f5f5;
+    color: #888;
+  }
+  .step-pill.active { background: #e8f5e9; color: #2e7d32; }
+  .step-arrow { color: #ccc; font-size: 12px; flex-shrink: 0; }
+
+  .voice-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #f3e5f5;
+    color: #7b1fa2;
+    margin-top: 4px;
+  }
+
+  /* ===== 语音与计时工具 ===== */
+  .tool-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .tool-tab {
+    flex: 1;
+    padding: 8px 4px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+    color: #666;
+  }
+  .tool-tab.active {
+    background: #07c160;
+    color: #fff;
+    border-color: #07c160;
+    font-weight: 600;
+  }
+  .tool-panel { display: none; }
+  .tool-panel.active { display: block; }
+  .record-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    background: #f9f9f9;
+    border-radius: 8px;
+    margin-bottom: 6px;
+  }
+  .record-item audio { flex: 1; height: 32px; min-width: 0; }
+  .record-item .rec-time { font-size: 11px; color: #888; white-space: nowrap; }
+  .record-item .rec-del {
+    color: #ccc;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 4px;
+  }
+</style>
+</head>
+<body>
+
+<!-- 状态栏 -->
+<div class="status-bar">
+  <span id="pageTitle">今日打卡</span>
+  <div class="capsule"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+</div>
+
+<!-- ===== 页面1：今日 ===== -->
+<div class="page active" id="page-today">
+  <!-- Day选择器 -->
+  <div class="card">
+    <div class="day-selector">
+      <span class="label">当前进度</span>
+      <div class="day-nav">
+        <button id="prevDay" onclick="changeDay(-1)">‹</button>
+        <span class="current" id="dayLabel">Day 1</span>
+        <button id="nextDay" onclick="changeDay(1)">›</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 任务卡片 -->
+  <div class="card" id="taskCard">
+    <!-- 动态渲染 -->
+  </div>
+
+  <!-- 语音与计时工具 -->
+  <div class="card timer-card">
+    <div style="font-size:15px;font-weight:600;margin-bottom:10px;">语音与计时工具</div>
+    <div class="tool-tabs">
+      <button class="tool-tab active" onclick="switchTool('record',this)">录制</button>
+      <button class="tool-tab" onclick="switchTool('stt',this)">转文字</button>
+    </div>
+
+    <!-- 录制 -->
+    <div class="tool-panel active" id="panel-record">
+      <div id="recordStatus" style="font-size:14px;color:#666;margin-bottom:6px;">点击开始录制，同时转文字</div>
+      <div id="sttAvailStatus" style="font-size:12px;color:#999;margin-bottom:10px;">检测语音识别支持中...</div>
+      <div style="font-size:32px;font-weight:200;font-variant-numeric:tabular-nums;color:#07c160;margin:8px 0;" id="recordDuration">00:00</div>
+      <div>
+        <button class="timer-btn start" id="recordBtn" onclick="toggleRecord()">开始录制</button>
+      </div>
+      <div id="recordLiveText" style="margin-top:10px;font-size:13px;color:#999;min-height:24px;text-align:left;display:none;"></div>
+      <div id="recordList" style="margin-top:12px;text-align:left;"></div>
+    </div>
+
+    <!-- 转文字 -->
+    <div class="tool-panel" id="panel-stt">
+      <div id="sttStatus" style="font-size:14px;color:#666;margin-bottom:10px;">录音文字记录</div>
+      <div id="sttList" style="text-align:left;">
+        <div class="empty-hint" style="padding:20px;">暂无录音文字记录<br>在「录制」页录制音频后会自动显示</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 页面2：进度 ===== -->
+<div class="page" id="page-progress">
+  <div class="card">
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px;">21天整体进度</div>
+    <div class="progress-overview">
+      <div class="progress-ring">
+        <svg width="140" height="140">
+          <circle class="ring-bg" cx="70" cy="70" r="62"></circle>
+          <circle class="ring-fill" cx="70" cy="70" r="62" id="ringFill"
+            stroke-dasharray="389.6" stroke-dashoffset="389.6"></circle>
+        </svg>
+        <div class="ring-text">
+          <div class="ring-percent" id="ringPercent">0%</div>
+          <div class="ring-label">总完成率</div>
+        </div>
+      </div>
+      <div class="progress-stats">
+        <div class="stat-box">
+          <div class="stat-num r1" id="r1Done">0/14</div>
+          <div class="stat-label">Round 1</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num r2" id="r2Done">0/7</div>
+          <div class="stat-label">Round 2</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="totalDone" style="color:#07c160;">0/21</div>
+          <div class="stat-label">总天数</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px;">21天打卡日历</div>
+    <div style="font-size:12px;color:#888;margin-bottom:8px;">点击任意一天查看详情</div>
+    <div class="calendar-grid" id="calendarGrid">
+      <!-- 动态渲染 -->
+    </div>
+    <div style="display:flex;gap:16px;margin-top:12px;font-size:11px;color:#888;">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#e8f5e9;margin-right:4px;"></span>全部完成</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#fff8e1;margin-right:4px;"></span>部分完成</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#e3f2fd;margin-right:4px;"></span>当天</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#f5f5f5;margin-right:4px;"></span>未开始</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 页面3：灵感库 ===== -->
+<div class="page" id="page-inspiration">
+  <div class="card inspiration-add">
+    <div style="font-size:16px;font-weight:700;margin-bottom:10px;">记录灵感</div>
+    <div class="inspiration-fields">
+      <select id="insType">
+        <option value="opinion">好观点</option>
+        <option value="expression">好表达</option>
+        <option value="spark">自己的火花</option>
+      </select>
+      <input type="text" id="insSource" placeholder="来源（播客名/书名）">
+      <input type="number" id="insDay" min="1" max="21" placeholder="Day">
+    </div>
+    <textarea id="insContent" placeholder="记下触动你的内容..."></textarea>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-cancel" id="insCancelBtn" onclick="cancelEdit()" style="display:none;">取消</button>
+      <button class="btn-primary" id="insSubmitBtn" onclick="addInspiration()" style="flex:1;">添加到灵感库</button>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 8px;">
+    <div style="font-size:14px;font-weight:600;color:#666;" id="insCount"></div>
+    <button class="btn-download" id="downloadAllBtn" onclick="downloadAllInspirations()">⬇ 全部下载</button>
+  </div>
+  <div id="inspirationList">
+    <!-- 动态渲染 -->
+  </div>
+</div>
+
+<!-- ===== 底部Tab ===== -->
+<div class="tab-bar">
+  <div class="tab-item active" onclick="switchTab('today')">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 12h3v8h6v-6h2v6h6v-8h3L12 2z"/></svg>
+    <span>今日</span>
+  </div>
+  <div class="tab-item" onclick="switchTab('progress')">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h18v2H3V3zm0 8h18v2H3v-2zm0 8h18v2H3v-2zM3 7h12v2H3V7zm0 8h12v2H3v-2z"/></svg>
+    <span>进度</span>
+  </div>
+  <div class="tab-item" onclick="switchTab('inspiration')">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+    <span>灵感库</span>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Day详情弹窗 -->
+<div class="modal-mask" id="modalMask" onclick="closeModal(event)">
+  <div class="modal-sheet" id="modalSheet">
+    <span class="modal-close" onclick="closeModal()">&times;</span>
+    <div class="modal-title" id="modalTitle"></div>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<script>
+// ===== 21天任务数据 =====
+const TASKS = {
+  // Round 1
+  1: { round:1, phase:'结构感', title:'Day 1 · 事件复盘', desc:'找一件你今天经历的事，用三句话说清楚：结果—原因—影响。', checks:[{id:'main',label:'主任务：完成三句结构表达（结果-原因-影响）'},{id:'voice',label:'录1分钟语音，把三句话口述出来'}] },
+  2: { round:1, phase:'结构感', title:'Day 2 · 事件复盘', desc:'找一件你今天经历的事，用三句话说清楚：结果—原因—影响。', checks:[{id:'main',label:'主任务：完成三句结构表达（结果-原因-影响）'},{id:'voice',label:'录1分钟语音，把三句话口述出来'}] },
+  3: { round:1, phase:'结构感', title:'Day 3 · 事件复盘', desc:'找一件你今天经历的事，用三句话说清楚：结果—原因—影响。', checks:[{id:'main',label:'主任务：完成三句结构表达（结果-原因-影响）'},{id:'voice',label:'录1分钟语音，把三句话口述出来'}] },
+  4: { round:1, phase:'具体化', title:'Day 4 · 抽象→具体', desc:'选一个抽象词（如自由、焦虑、成长），用50-100字把它具体化，要有画面感。', checks:[{id:'main',label:'主任务：把一个抽象词具体化表达'},{id:'voice',label:'录1分钟语音，注意画面感'}] },
+  5: { round:1, phase:'具体化', title:'Day 5 · 黑话→人话', desc:'找一个常用黑话（如"赋能""抓手""闭环"），翻译成人话。', checks:[{id:'main',label:'主任务：黑话翻译成人话'},{id:'voice',label:'录1分钟语音，对比两种表达'}] },
+  6: { round:1, phase:'具体化', title:'Day 6 · 感受→数据', desc:'把今天的感受用"具体数字+场景"重新表达。', checks:[{id:'main',label:'主任务：把感受数据化表达'},{id:'voice',label:'录1分钟语音，让数字有重音感'}] },
+  7: { round:1, phase:'具体化', title:'Day 7 · 周练整合', desc:'用"结果-原因-影响"描述本周最大收获，每句含具体细节或数据。回听本周语音，写100字复盘。', checks:[{id:'main',label:'主任务：结构感+具体化综合练习'},{id:'voice',label:'录1分钟语音 + 100字周复盘'}] },
+  8: { round:1, phase:'观点表达', title:'Day 8 · 观点初试', desc:'找一个话题，用"我认为…因为…所以…"句式表达。理由至少2个。', checks:[{id:'main',label:'主任务：用"我认为→因为→所以"表达观点'},{id:'voice',label:'录1分钟语音，注意三个层次'}] },
+  9: { round:1, phase:'观点表达', title:'Day 9 · 站在对立面输出观点', desc:'针对Day 8的观点，站在对立面输出一个观点。', checks:[{id:'main',label:'主任务：站在对立面输出观点'},{id:'voice',label:'录1分钟语音，呈现原观点和对立面观点'}] },
+  10: { round:1, phase:'观点表达', title:'Day 10 · 回应他人', desc:'找一个别人的观点，复述+判断（认同/部分认同/不认同）+理由。', checks:[{id:'main',label:'主任务：回应别人的观点 + 判断'},{id:'voice',label:'录1分钟语音'}] },
+  11: { round:1, phase:'即兴表达', title:'Day 11 · 词语触发', desc:'随机说一个词，1分钟即兴表达，要求有开头、有中间、有结尾。', checks:[{id:'main',label:'主任务：随机词→1分钟即兴表达'},{id:'voice',label:'录1分钟语音（即兴本身就是任务）'}] },
+  12: { round:1, phase:'即兴表达', title:'Day 12 · 词语触发', desc:'随机说一个词，1分钟即兴表达，要求有开头、有中间、有结尾。', checks:[{id:'main',label:'主任务：随机词→1分钟即兴表达'},{id:'voice',label:'录1分钟语音（即兴本身就是任务）'}] },
+  13: { round:1, phase:'即兴表达', title:'Day 13 · 词语触发', desc:'随机说一个词，1分钟即兴表达，要求有开头、有中间、有结尾。', checks:[{id:'main',label:'主任务：随机词→1分钟即兴表达'},{id:'voice',label:'录1分钟语音（即兴本身就是任务）'}] },
+  14: { round:1, phase:'真实场景', title:'Day 14 · 真实场景实战', desc:'在真实互动中用两周练过的方式完整说一次（聊天/汇报/被提问均可）。', checks:[{id:'main',label:'主任务：真实场景实战表达'},{id:'voice',label:'听对方反馈 + 事后复盘'}] },
+
+  // Round 2（Day 15-21统一五步闭环）
+  15: { round:2, phase:'进阶融合 · 五步闭环', title:'Day 15 · 进阶融合', desc:'高质量输入 → 灵感库 → 输出观点 → AI复盘 → 声线朗读。', steps:['高质量输入30min+','记灵感库','输出1分钟观点','AI复盘缺陷与改进','声线朗读'], checks:[{id:'input',label:'高质量输入（30分钟+）'},{id:'inspiration',label:'灵感库：记录至少1条触动你的内容'},{id:'output',label:'输出：根据素材输出自己的观点，录1分钟+语音'},{id:'aiReview',label:'AI复盘：复盘缺陷与改进'},{id:'voiceLine',label:'声线朗读：选择适合的声线朗读并录音'}] },
+  16: { round:2, phase:'进阶融合 · 五步闭环', title:'Day 16 · 进阶融合', desc:'高质量输入 → 灵感库 → 输出观点 → AI复盘 → 声线朗读。', steps:['高质量输入30min+','记灵感库','输出1分钟观点','AI复盘缺陷与改进','声线朗读'], checks:[{id:'input',label:'高质量输入（30分钟+）'},{id:'inspiration',label:'灵感库：记录至少1条触动你的内容'},{id:'output',label:'输出：根据素材输出自己的观点，录1分钟+语音'},{id:'aiReview',label:'AI复盘：复盘缺陷与改进'},{id:'voiceLine',label:'声线朗读：选择适合的声线朗读并录音'}] },
+  17: { round:2, phase:'进阶融合 · 五步闭环', title:'Day 17 · 进阶融合', desc:'高质量输入 → 灵感库 → 输出观点 → AI复盘 → 声线朗读。', steps:['高质量输入30min+','记灵感库','输出1分钟观点','AI复盘缺陷与改进','声线朗读'], checks:[{id:'input',label:'高质量输入（30分钟+）'},{id:'inspiration',label:'灵感库：记录至少1条触动你的内容'},{id:'output',label:'输出：根据素材输出自己的观点，录1分钟+语音'},{id:'aiReview',label:'AI复盘：复盘缺陷与改进'},{id:'voiceLine',label:'声线朗读：选择适合的声线朗读并录音'}] },
+  18: { round:2, phase:'进阶融合 · 五步闭环', title:'Day 18 · 进阶融合', desc:'高质量输入 → 灵感库 → 输出观点 → AI复盘 → 声线朗读。', steps:['高质量输入30min+','记灵感库','输出1分钟观点','AI复盘缺陷与改进','声线朗读'], checks:[{id:'input',label:'高质量输入（30分钟+）'},{id:'inspiration',label:'灵感库：记录至少1条触动你的内容'},{id:'output',label:'输出：根据素材输出自己的观点，录1分钟+语音'},{id:'aiReview',label:'AI复盘：复盘缺陷与改进'},{id:'voiceLine',label:'声线朗读：选择适合的声线朗读并录音'}] },
+  19: { round:2, phase:'进阶融合 · 五步闭环', title:'Day 19 · 进阶融合', desc:'高质量输入 → 灵感库 → 输出观点 → AI复盘 → 声线朗读。', steps:['高质量输入30min+','记灵感库','输出1分钟观点','AI复盘缺陷与改进','声线朗读'], checks:[{id:'input',label:'高质量输入（30分钟+）'},{id:'inspiration',label:'灵感库：记录至少1条触动你的内容'},{id:'output',label:'输出：根据素材输出自己的观点，录1分钟+语音'},{id:'aiReview',label:'AI复盘：复盘缺陷与改进'},{id:'voiceLine',label:'声线朗读：选择适合的声线朗读并录音'}] },
+  20: { round:2, phase:'进阶融合 · 五步闭环', title:'Day 20 · 进阶融合', desc:'高质量输入 → 灵感库 → 输出观点 → AI复盘 → 声线朗读。', steps:['高质量输入30min+','记灵感库','输出1分钟观点','AI复盘缺陷与改进','声线朗读'], checks:[{id:'input',label:'高质量输入（30分钟+）'},{id:'inspiration',label:'灵感库：记录至少1条触动你的内容'},{id:'output',label:'输出：根据素材输出自己的观点，录1分钟+语音'},{id:'aiReview',label:'AI复盘：复盘缺陷与改进'},{id:'voiceLine',label:'声线朗读：选择适合的声线朗读并录音'}] },
+  21: { round:2, phase:'进阶融合 · 五步闭环', title:'Day 21 · 进阶融合', desc:'高质量输入 → 灵感库 → 输出观点 → AI复盘 → 声线朗读。', steps:['高质量输入30min+','记灵感库','输出1分钟观点','AI复盘缺陷与改进','声线朗读'], checks:[{id:'input',label:'高质量输入（30分钟+）'},{id:'inspiration',label:'灵感库：记录至少1条触动你的内容'},{id:'output',label:'输出：根据素材输出自己的观点，录1分钟+语音'},{id:'aiReview',label:'AI复盘：复盘缺陷与改进'},{id:'voiceLine',label:'声线朗读：选择适合的声线朗读并录音'}] }
+};
+
+// ===== 数据持久化 =====
+const STORAGE_KEY = 'expression_system_v1';
+let state = {
+  currentDay: 1,
+  checkins: {}, // { dayNum: { taskId: true/false } }
+  inspirations: [] // [{ id, type, content, source, day, date }]
+};
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      state = { ...state, ...parsed };
+    }
+  } catch(e) { console.warn('Load failed:', e); }
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch(e) { console.warn('Save failed:', e); }
+}
+
+// ===== Tab 切换 =====
+function switchTab(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+  
+  const pageMap = { today: 'page-today', progress: 'page-progress', inspiration: 'page-inspiration' };
+  const titleMap = { today: '今日打卡', progress: '进度追踪', inspiration: '灵感库' };
+  
+  document.getElementById(pageMap[name]).classList.add('active');
+  document.querySelectorAll('.tab-item')[name === 'today' ? 0 : name === 'progress' ? 1 : 2].classList.add('active');
+  document.getElementById('pageTitle').textContent = titleMap[name];
+  
+  if (name === 'progress') renderProgress();
+  if (name === 'inspiration') renderInspirations();
+}
+
+// ===== Day 切换 =====
+function changeDay(delta) {
+  const newDay = state.currentDay + delta;
+  if (newDay < 1 || newDay > 21) return;
+  state.currentDay = newDay;
+  saveState();
+  renderToday();
+}
+
+// ===== 渲染今日 =====
+function renderToday() {
+  const day = state.currentDay;
+  const task = TASKS[day];
+  
+  // Day标签
+  document.getElementById('dayLabel').textContent = 'Day ' + day;
+  document.getElementById('prevDay').disabled = day <= 1;
+  document.getElementById('nextDay').disabled = day >= 21;
+  
+  // 任务卡片
+  const card = document.getElementById('taskCard');
+  const roundClass = task.round === 1 ? 'r1' : 'r2';
+  const roundLabel = task.round === 1 ? 'Round 1 · 基本功' : 'Round 2 · 进阶';
+  
+  let stepsHtml = '';
+  if (task.steps) {
+    const checks = state.checkins[day] || {};
+    stepsHtml = '<div class="step-flow">';
+    task.steps.forEach((step, i) => {
+      stepsHtml += `<span class="step-pill ${checks[task.checks[i].id] ? 'active' : ''}">${step}</span>`;
+      if (i < task.steps.length - 1) stepsHtml += '<span class="step-arrow">›</span>';
+    });
+    stepsHtml += '</div>';
+  }
+  
+  let voiceTagHtml = task.voiceTag ? `<div class="voice-tag">推荐声线：${task.voiceTag}</div>` : '';
+  
+  let checksHtml = '';
+  task.checks.forEach(c => {
+    const done = (state.checkins[day] && state.checkins[day][c.id]) || false;
+    checksHtml += `
+      <div class="check-item ${done ? 'done' : ''}" onclick="toggleCheck(${day}, '${c.id}')">
+        <div class="check-circle"></div>
+        <div class="check-text">${c.label}</div>
+      </div>`;
+  });
+  
+  card.innerHTML = `
+    <span class="round-badge ${roundClass}">${roundLabel}</span>
+    <div class="task-header">${task.title}</div>
+    <div class="task-phase">${task.phase}</div>
+    <div style="font-size:14px;line-height:1.6;color:#555;margin-bottom:12px;">${task.desc}</div>
+    ${stepsHtml}
+    ${voiceTagHtml}
+    ${checksHtml}
+  `;
+}
+
+// ===== 打卡切换 =====
+function toggleCheck(day, checkId) {
+  if (!state.checkins[day]) state.checkins[day] = {};
+  state.checkins[day][checkId] = !state.checkins[day][checkId];
+  saveState();
+  renderToday();
+  showToast(state.checkins[day][checkId] ? '已完成 ✓' : '已取消');
+}
+
+// ===== Toast =====
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1500);
+}
+
+// ===== 语音与计时工具 =====
+function switchTool(tool, btn) {
+  document.querySelectorAll('.tool-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tool-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panel-' + tool).classList.add('active');
+  if (tool === 'stt') renderSttList();
+}
+
+// ===== 计时器（仅正计时） =====
+let toolTimerInterval = null;
+let toolTimerSeconds = 0;
+let toolTimerRunning = false;
+
+function toggleToolTimer() {
+  if (toolTimerRunning) {
+    clearInterval(toolTimerInterval);
+    toolTimerRunning = false;
+    document.getElementById('toolTimerBtn').textContent = '继续';
+    document.getElementById('toolTimerBtn').className = 'timer-btn start';
+    document.getElementById('toolTimerHint').textContent = '已暂停';
+  } else {
+    toolTimerRunning = true;
+    document.getElementById('toolTimerBtn').textContent = '暂停';
+    document.getElementById('toolTimerBtn').className = 'timer-btn stop';
+    document.getElementById('toolTimerHint').textContent = '正计时中...';
+    toolTimerInterval = setInterval(() => {
+      toolTimerSeconds++;
+      updateToolTimerDisplay();
+    }, 1000);
+  }
+}
+
+function updateToolTimerDisplay() {
+  const m = Math.floor(toolTimerSeconds / 60);
+  const s = toolTimerSeconds % 60;
+  document.getElementById('toolTimerDisplay').textContent =
+    String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+function resetToolTimer() {
+  clearInterval(toolTimerInterval);
+  toolTimerRunning = false;
+  toolTimerSeconds = 0;
+  updateToolTimerDisplay();
+  document.getElementById('toolTimerDisplay').className = 'timer-display';
+  document.getElementById('toolTimerDisplay').style.color = '';
+  document.getElementById('toolTimerBtn').textContent = '开始';
+  document.getElementById('toolTimerBtn').className = 'timer-btn start';
+  document.getElementById('toolTimerHint').textContent = '正计时';
+}
+
+// ===== 语音录制（同步转文字） =====
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordBlobs = [];
+let recordDurationInterval = null;
+let recordDurationSec = 0;
+let recordRecognition = null;
+let recordLiveTranscript = '';
+
+let speechApiAvailable = false;
+let speechApiError = '';
+
+function checkSpeechApi() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    speechApiAvailable = false;
+    speechApiError = '当前浏览器不支持语音识别（需 Chrome/Edge）';
+    return;
+  }
+  // 测试能否实例化
+  try {
+    const test = new SpeechRecognition();
+    speechApiAvailable = true;
+  } catch(e) {
+    speechApiAvailable = false;
+    speechApiError = '语音识别初始化失败：' + e.message;
+  }
+}
+
+function getSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return null;
+  return new SpeechRecognition();
+}
+
+function updateSttAvailStatus() {
+  const el = document.getElementById('sttAvailStatus');
+  if (!el) return;
+  if (speechApiAvailable) {
+    el.textContent = '语音识别已就绪';
+    el.style.color = '#07c160';
+  } else {
+    el.textContent = speechApiError || '语音识别不可用';
+    el.style.color = '#e65100';
+  }
+}
+
+function fmtDuration(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+function toggleRecord() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    // 启动录音
+    mediaRecorder = new MediaRecorder(stream);
+    recordedChunks = [];
+    recordDurationSec = 0;
+    recordLiveTranscript = '';
+
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+      const url = URL.createObjectURL(blob);
+      const timestamp = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      recordBlobs.push({ id: Date.now(), url: url, blob: blob, time: timestamp, duration: recordDurationSec, text: recordLiveTranscript });
+      renderRecordList();
+      renderSttList();
+
+      clearInterval(recordDurationInterval);
+      recordDurationInterval = null;
+      if (recordRecognition) { try { recordRecognition.stop(); } catch(e) {} }
+
+      document.getElementById('recordStatus').textContent = '录制完成';
+      document.getElementById('recordBtn').textContent = '开始录制';
+      document.getElementById('recordBtn').className = 'timer-btn start';
+      document.getElementById('recordDuration').textContent = '00:00';
+      document.getElementById('recordLiveText').style.display = 'none';
+      stream.getTracks().forEach(t => t.stop());
+    };
+
+    // 启动时长计时
+    recordDurationInterval = setInterval(() => {
+      recordDurationSec++;
+      document.getElementById('recordDuration').textContent = fmtDuration(recordDurationSec);
+    }, 1000);
+
+    // 启动同步语音识别
+    const SR = getSpeechRecognition();
+    if (SR) {
+      recordRecognition = SR;
+      recordRecognition.lang = 'zh-CN';
+      recordRecognition.continuous = true;
+      recordRecognition.interimResults = true;
+      recordRecognition.onresult = e => {
+        let interim = '';
+        let final = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) final += e.results[i][0].transcript;
+          else interim += e.results[i][0].transcript;
+        }
+        if (final) recordLiveTranscript += final;
+        const liveEl = document.getElementById('recordLiveText');
+        liveEl.style.display = 'block';
+        liveEl.innerHTML = escapeHtml(recordLiveTranscript) +
+          (interim ? '<span style="color:#bbb;"> ' + escapeHtml(interim) + '</span>' : '');
+      };
+      recordRecognition.onerror = e => {
+        if (e.error === 'not-allowed') {
+          document.getElementById('sttAvailStatus').textContent = '语音识别被禁止：请用 HTTPS/localhost 访问，或检查浏览器权限';
+          document.getElementById('sttAvailStatus').style.color = '#e65100';
+        } else if (e.error === 'no-speech') {
+          // 没检测到语音，静默处理
+        } else {
+          document.getElementById('sttAvailStatus').textContent = '语音识别出错：' + e.error;
+          document.getElementById('sttAvailStatus').style.color = '#e65100';
+        }
+      };
+      recordRecognition.onend = () => {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+          try { recordRecognition.start(); } catch(e) {}
+        }
+      };
+      try { recordRecognition.start(); } catch(e) {
+        document.getElementById('sttAvailStatus').textContent = '语音识别启动失败：' + e.message;
+        document.getElementById('sttAvailStatus').style.color = '#e65100';
+      }
+    }
+
+    mediaRecorder.start();
+    document.getElementById('recordStatus').textContent = '正在录制...';
+    document.getElementById('recordBtn').textContent = '停止录制';
+    document.getElementById('recordBtn').className = 'timer-btn stop';
+    document.getElementById('recordDuration').textContent = '00:00';
+    document.getElementById('recordLiveText').style.display = 'none';
+    document.getElementById('recordLiveText').textContent = '';
+  }).catch(err => {
+    showToast('无法访问麦克风：' + err.message);
+  });
+}
+
+function renderRecordList() {
+  const list = document.getElementById('recordList');
+  if (recordBlobs.length === 0) { list.innerHTML = ''; return; }
+  list.innerHTML = recordBlobs.map((r, i) => `
+    <div class="record-item">
+      <span class="rec-time">${i + 1}. ${fmtDuration(r.duration)}</span>
+      <audio controls src="${r.url}"></audio>
+      <button class="ins-dl" onclick="downloadRecord(${r.id})">下载</button>
+      <span class="rec-del" onclick="deleteRecord(${r.id})">&times;</span>
+    </div>
+  `).join('');
+}
+
+function downloadRecord(id) {
+  const r = recordBlobs.find(x => x.id === id);
+  if (!r) return;
+  const a = document.createElement('a');
+  a.href = r.url;
+  a.download = '录音_' + r.time.replace(/:/g, '-') + '.webm';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function deleteRecord(id) {
+  recordBlobs = recordBlobs.filter(x => x.id !== id);
+  renderRecordList();
+  renderSttList();
+}
+
+// ===== 转文字（录音文字记录） =====
+function renderSttList() {
+  const list = document.getElementById('sttList');
+  if (recordBlobs.length === 0) {
+    list.innerHTML = '<div class="empty-hint" style="padding:20px;">暂无录音文字记录<br>在「录制」页录制音频后会自动显示</div>';
+    return;
+  }
+  const sorted = [...recordBlobs].sort((a, b) => b.id - a.id);
+  list.innerHTML = sorted.map((r, i) => `
+    <div class="record-item" style="flex-direction:column;align-items:flex-start;gap:6px;">
+      <div style="display:flex;align-items:center;gap:8px;width:100%;">
+        <span style="font-size:13px;font-weight:600;color:#333;">录音 ${sorted.length - i}</span>
+        <span style="font-size:12px;color:#888;">${r.time} · ${fmtDuration(r.duration)}</span>
+        <span style="flex:1;"></span>
+        <span class="rec-del" onclick="deleteRecord(${r.id})" style="font-size:18px;">&times;</span>
+      </div>
+      <audio controls src="${r.url}" style="width:100%;"></audio>
+      <div style="font-size:13px;line-height:1.6;color:#555;background:#f9f9f9;border-radius:6px;padding:8px 10px;width:100%;">
+        ${r.text ? escapeHtml(r.text) : '<span style="color:#bbb;">未识别到文字</span>'}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ===== 进度页 =====
+function renderProgress() {
+  let totalDone = 0;
+  let r1Done = 0;
+  let r2Done = 0;
+  
+  for (let d = 1; d <= 21; d++) {
+    const task = TASKS[d];
+    const checks = state.checkins[d] || {};
+    const total = task.checks.length;
+    let done = 0;
+    task.checks.forEach(c => { if (checks[c.id]) done++; });
+    
+    if (done === total) {
+      totalDone++;
+      if (task.round === 1) r1Done++; else r2Done++;
+    }
+  }
+  
+  const percent = Math.round((totalDone / 21) * 100);
+  
+  // 环形进度
+  const circumference = 2 * Math.PI * 62;
+  const offset = circumference - (percent / 100) * circumference;
+  document.getElementById('ringFill').style.strokeDashoffset = offset;
+  document.getElementById('ringPercent').textContent = percent + '%';
+  
+  document.getElementById('r1Done').textContent = r1Done + '/14';
+  document.getElementById('r2Done').textContent = r2Done + '/7';
+  document.getElementById('totalDone').textContent = totalDone + '/21';
+  
+  // 日历网格
+  const grid = document.getElementById('calendarGrid');
+  let html = '';
+  for (let d = 1; d <= 21; d++) {
+    const task = TASKS[d];
+    const checks = state.checkins[d] || {};
+    const total = task.checks.length;
+    let done = 0;
+    task.checks.forEach(c => { if (checks[c.id]) done++; });
+    
+    let cls = 'pending';
+    let dot = '';
+    if (done === total && done > 0) { cls = 'done'; dot = '<div class="check-dot"></div>'; }
+    else if (done > 0) { cls = 'partial'; dot = '<div class="check-dot"></div>'; }
+    if (d === state.currentDay) cls = 'current';
+    
+    html += `<div class="cal-day ${cls}" onclick="showDayDetail(${d})">
+      <div class="day-num">${d}</div>
+      ${dot}
+    </div>`;
+  }
+  grid.innerHTML = html;
+}
+
+// ===== Day详情弹窗 =====
+function showDayDetail(day) {
+  const task = TASKS[day];
+  const checks = state.checkins[day] || {};
+  
+  document.getElementById('modalTitle').textContent = task.title;
+  
+  let html = `
+    <div class="modal-detail-item"><div class="detail-label">阶段</div>${task.phase}</div>
+    <div class="modal-detail-item"><div class="detail-label">说明</div>${task.desc}</div>
+  `;
+  
+  if (task.steps) {
+    html += `<div class="modal-detail-item"><div class="detail-label">五步流程</div>${task.steps.join(' → ')}</div>`;
+  }
+  if (task.voiceTag) {
+    html += `<div class="modal-detail-item"><div class="detail-label">推荐声线</div>${task.voiceTag}</div>`;
+  }
+  
+  html += '<div class="modal-detail-item"><div class="detail-label">打卡项</div>';
+  task.checks.forEach(c => {
+    const done = checks[c.id] || false;
+    html += `<div style="padding:4px 0;font-size:13px;">${done ? '✅' : '⬜'} ${c.label}</div>`;
+  });
+  html += '</div>';
+  
+  // 统计
+  let doneCount = 0;
+  task.checks.forEach(c => { if (checks[c.id]) doneCount++; });
+  html += `<div class="modal-detail-item"><div class="detail-label">完成情况</div>${doneCount}/${task.checks.length}</div>`;
+  
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modalMask').classList.add('show');
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modalMask')) return;
+  document.getElementById('modalMask').classList.remove('show');
+}
+
+// ===== 灵感库 =====
+let editingInsId = null;
+
+function addInspiration() {
+  const type = document.getElementById('insType').value;
+  const source = document.getElementById('insSource').value.trim();
+  const day = document.getElementById('insDay').value || state.currentDay;
+  const content = document.getElementById('insContent').value.trim();
+  
+  if (!content) {
+    showToast('请输入内容');
+    return;
+  }
+  
+  const typeMap = { opinion: '好观点', expression: '好表达', spark: '自己的火花' };
+  
+  // 编辑模式：更新已有记录
+  if (editingInsId !== null) {
+    const ins = state.inspirations.find(i => i.id === editingInsId);
+    if (ins) {
+      ins.type = type;
+      ins.typeLabel = typeMap[type];
+      ins.content = content;
+      ins.source = source || '未标注';
+      ins.day = day;
+    }
+    saveState();
+    exitEditMode();
+    renderInspirations();
+    showToast('已保存修改 ✓');
+    return;
+  }
+  
+  // 新增模式
+  state.inspirations.push({
+    id: Date.now(),
+    type: type,
+    typeLabel: typeMap[type],
+    content: content,
+    source: source || '未标注',
+    day: day,
+    date: new Date().toLocaleDateString('zh-CN')
+  });
+  
+  saveState();
+  
+  // 清空输入
+  clearInsForm();
+  
+  renderInspirations();
+  showToast('已添加到灵感库 ✓');
+}
+
+function clearInsForm() {
+  document.getElementById('insContent').value = '';
+  document.getElementById('insSource').value = '';
+  document.getElementById('insDay').value = '';
+}
+
+function exitEditMode() {
+  editingInsId = null;
+  clearInsForm();
+  document.getElementById('insSubmitBtn').textContent = '添加到灵感库';
+  document.getElementById('insCancelBtn').style.display = 'none';
+}
+
+function editInspiration(id) {
+  const ins = state.inspirations.find(i => i.id === id);
+  if (!ins) return;
+  editingInsId = id;
+  document.getElementById('insType').value = ins.type;
+  document.getElementById('insSource').value = ins.source === '未标注' ? '' : ins.source;
+  document.getElementById('insDay').value = ins.day;
+  document.getElementById('insContent').value = ins.content;
+  document.getElementById('insSubmitBtn').textContent = '保存修改';
+  document.getElementById('insCancelBtn').style.display = '';
+  document.getElementById('page-inspiration').scrollIntoView({ behavior: 'smooth' });
+  showToast('正在编辑这条记录');
+}
+
+function cancelEdit() {
+  exitEditMode();
+  renderInspirations();
+  showToast('已取消编辑');
+}
+
+function deleteInspiration(id) {
+  state.inspirations = state.inspirations.filter(i => i.id !== id);
+  saveState();
+  renderInspirations();
+  showToast('已删除');
+}
+
+function renderInspirations() {
+  const list = document.getElementById('inspirationList');
+  const count = document.getElementById('insCount');
+  
+  if (state.inspirations.length === 0) {
+    count.textContent = '';
+    document.getElementById('downloadAllBtn').style.display = 'none';
+    list.innerHTML = '<div class="empty-hint">还没有记录灵感<br>Round 2（Day 15）开始使用</div>';
+    return;
+  }
+  
+  document.getElementById('downloadAllBtn').style.display = '';
+  count.textContent = '共 ' + state.inspirations.length + ' 条灵感';
+  
+  // 按Day倒序
+  const sorted = [...state.inspirations].sort((a, b) => b.day - a.day);
+  
+  list.innerHTML = sorted.map(ins => `
+    <div class="inspiration-item">
+      <span class="ins-del" onclick="deleteInspiration(${ins.id})">&times;</span>
+      <span class="ins-type ${ins.type}">${ins.typeLabel}</span>
+      <div class="ins-content">${escapeHtml(ins.content)}</div>
+      <div class="ins-meta">
+        <span>Day ${ins.day} · ${escapeHtml(ins.source)}</span>
+        <span>${ins.date}</span>
+      </div>
+      <div class="ins-actions">
+        <button class="ins-edit" onclick="editInspiration(${ins.id})">编辑</button>
+        <button class="ins-dl" onclick="downloadOneInspiration(${ins.id})">下载</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ===== 灵感下载 =====
+function downloadOneInspiration(id) {
+  const ins = state.inspirations.find(i => i.id === id);
+  if (!ins) return;
+  downloadTextFile(
+    ins.typeLabel + '（Day ' + ins.day + ' · ' + ins.source + '）\n' + ins.content,
+    '灵感_' + ins.typeLabel + '_Day' + ins.day + '.txt'
+  );
+}
+
+function downloadAllInspirations() {
+  if (state.inspirations.length === 0) {
+    showToast('暂无灵感记录');
+    return;
+  }
+  const sorted = [...state.inspirations].sort((a, b) => a.day - b.day);
+  let content = '【21天表达系统 · 灵感库导出】\n';
+  content += '共 ' + sorted.length + ' 条记录，导出时间：' + new Date().toLocaleString('zh-CN') + '\n';
+  content += '='.repeat(40) + '\n\n';
+  
+  sorted.forEach((ins, i) => {
+    content += (i + 1) + '. [' + ins.typeLabel + '] Day ' + ins.day + '\n';
+    content += '   来源：' + ins.source + '\n';
+    content += '   记录时间：' + ins.date + '\n';
+    content += '   内容：' + ins.content + '\n\n';
+  });
+  
+  const dateStr = new Date().toISOString().slice(0, 10);
+  downloadTextFile(content, '灵感库导出_' + dateStr + '.txt');
+  showToast('已下载全部 ' + sorted.length + ' 条灵感');
+}
+
+function downloadTextFile(content, filename) {
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ===== 初始化 =====
+checkSpeechApi();
+loadState();
+renderToday();
+// 等DOM就绪后更新语音识别状态
+setTimeout(updateSttAvailStatus, 100);
+</script>
+</body>
+</html>
