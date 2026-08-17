@@ -566,21 +566,23 @@
 
     <!-- 录制 -->
     <div class="tool-panel active" id="panel-record">
-      <div id="recordStatus" style="font-size:14px;color:#666;margin-bottom:6px;">点击开始录制，同时转文字</div>
-      <div id="sttAvailStatus" style="font-size:12px;color:#999;margin-bottom:10px;">检测语音识别支持中...</div>
+      <div id="recordStatus" style="font-size:14px;color:#666;margin-bottom:10px;">点击开始录制音频</div>
       <div style="font-size:32px;font-weight:200;font-variant-numeric:tabular-nums;color:#07c160;margin:8px 0;" id="recordDuration">00:00</div>
       <div>
         <button class="timer-btn start" id="recordBtn" onclick="toggleRecord()">开始录制</button>
       </div>
-      <div id="recordLiveText" style="margin-top:10px;font-size:13px;color:#999;min-height:24px;text-align:left;display:none;"></div>
       <div id="recordList" style="margin-top:12px;text-align:left;"></div>
     </div>
 
     <!-- 转文字 -->
     <div class="tool-panel" id="panel-stt">
-      <div id="sttStatus" style="font-size:14px;color:#666;margin-bottom:10px;">录音文字记录</div>
-      <div id="sttList" style="text-align:left;">
-        <div class="empty-hint" style="padding:20px;">暂无录音文字记录<br>在「录制」页录制音频后会自动显示</div>
+      <div id="sttStatus" style="font-size:14px;color:#666;margin-bottom:10px;">实时语音转文字</div>
+      <div id="sttLiveText" style="font-size:14px;line-height:1.6;color:#333;min-height:40px;background:#f9f9f9;border-radius:8px;padding:10px;margin-bottom:10px;display:none;text-align:left;"></div>
+      <div>
+        <button class="timer-btn start" id="sttRecordBtn" onclick="toggleSttRecord()">开始转文字</button>
+      </div>
+      <div id="sttList" style="text-align:left;margin-top:12px;">
+        <div class="empty-hint" style="padding:20px;">暂无转文字记录<br>点击上方按钮开始识别</div>
       </div>
     </div>
   </div>
@@ -725,7 +727,8 @@ const STORAGE_KEY = 'expression_system_v1';
 let state = {
   currentDay: 1,
   checkins: {}, // { dayNum: { taskId: true/false } }
-  inspirations: [] // [{ id, type, content, source, day, date }]
+  inspirations: [], // [{ id, type, content, source, day, date }]
+  sttRecords: [] // [{ id, text, date }]
 };
 
 function loadState() {
@@ -841,7 +844,7 @@ function switchTool(tool, btn) {
   document.querySelectorAll('.tool-panel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('panel-' + tool).classList.add('active');
-  if (tool === 'stt') renderSttList();
+  if (tool === 'stt') renderSttRecords();
 }
 
 // ===== 计时器（仅正计时） =====
@@ -887,52 +890,12 @@ function resetToolTimer() {
   document.getElementById('toolTimerHint').textContent = '正计时';
 }
 
-// ===== 语音录制（同步转文字） =====
+// ===== 语音录制 =====
 let mediaRecorder = null;
 let recordedChunks = [];
 let recordBlobs = [];
 let recordDurationInterval = null;
 let recordDurationSec = 0;
-let recordRecognition = null;
-let recordLiveTranscript = '';
-
-let speechApiAvailable = false;
-let speechApiError = '';
-
-function checkSpeechApi() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    speechApiAvailable = false;
-    speechApiError = '当前浏览器不支持语音识别（需 Chrome/Edge）';
-    return;
-  }
-  // 测试能否实例化
-  try {
-    const test = new SpeechRecognition();
-    speechApiAvailable = true;
-  } catch(e) {
-    speechApiAvailable = false;
-    speechApiError = '语音识别初始化失败：' + e.message;
-  }
-}
-
-function getSpeechRecognition() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) return null;
-  return new SpeechRecognition();
-}
-
-function updateSttAvailStatus() {
-  const el = document.getElementById('sttAvailStatus');
-  if (!el) return;
-  if (speechApiAvailable) {
-    el.textContent = '语音识别已就绪';
-    el.style.color = '#07c160';
-  } else {
-    el.textContent = speechApiError || '语音识别不可用';
-    el.style.color = '#e65100';
-  }
-}
 
 function fmtDuration(sec) {
   const m = Math.floor(sec / 60);
@@ -946,88 +909,38 @@ function toggleRecord() {
     return;
   }
   navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-    // 启动录音
     mediaRecorder = new MediaRecorder(stream);
     recordedChunks = [];
     recordDurationSec = 0;
-    recordLiveTranscript = '';
 
     mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
     mediaRecorder.onstop = () => {
       const blob = new Blob(recordedChunks, { type: 'audio/webm' });
       const url = URL.createObjectURL(blob);
       const timestamp = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      recordBlobs.push({ id: Date.now(), url: url, blob: blob, time: timestamp, duration: recordDurationSec, text: recordLiveTranscript });
+      recordBlobs.push({ id: Date.now(), url: url, blob: blob, time: timestamp, duration: recordDurationSec });
       renderRecordList();
-      renderSttList();
 
       clearInterval(recordDurationInterval);
       recordDurationInterval = null;
-      if (recordRecognition) { try { recordRecognition.stop(); } catch(e) {} }
 
       document.getElementById('recordStatus').textContent = '录制完成';
       document.getElementById('recordBtn').textContent = '开始录制';
       document.getElementById('recordBtn').className = 'timer-btn start';
       document.getElementById('recordDuration').textContent = '00:00';
-      document.getElementById('recordLiveText').style.display = 'none';
       stream.getTracks().forEach(t => t.stop());
     };
 
-    // 启动时长计时
     recordDurationInterval = setInterval(() => {
       recordDurationSec++;
       document.getElementById('recordDuration').textContent = fmtDuration(recordDurationSec);
     }, 1000);
-
-    // 启动同步语音识别
-    const SR = getSpeechRecognition();
-    if (SR) {
-      recordRecognition = SR;
-      recordRecognition.lang = 'zh-CN';
-      recordRecognition.continuous = true;
-      recordRecognition.interimResults = true;
-      recordRecognition.onresult = e => {
-        let interim = '';
-        let final = '';
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) final += e.results[i][0].transcript;
-          else interim += e.results[i][0].transcript;
-        }
-        if (final) recordLiveTranscript += final;
-        const liveEl = document.getElementById('recordLiveText');
-        liveEl.style.display = 'block';
-        liveEl.innerHTML = escapeHtml(recordLiveTranscript) +
-          (interim ? '<span style="color:#bbb;"> ' + escapeHtml(interim) + '</span>' : '');
-      };
-      recordRecognition.onerror = e => {
-        if (e.error === 'not-allowed') {
-          document.getElementById('sttAvailStatus').textContent = '语音识别被禁止：请用 HTTPS/localhost 访问，或检查浏览器权限';
-          document.getElementById('sttAvailStatus').style.color = '#e65100';
-        } else if (e.error === 'no-speech') {
-          // 没检测到语音，静默处理
-        } else {
-          document.getElementById('sttAvailStatus').textContent = '语音识别出错：' + e.error;
-          document.getElementById('sttAvailStatus').style.color = '#e65100';
-        }
-      };
-      recordRecognition.onend = () => {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-          try { recordRecognition.start(); } catch(e) {}
-        }
-      };
-      try { recordRecognition.start(); } catch(e) {
-        document.getElementById('sttAvailStatus').textContent = '语音识别启动失败：' + e.message;
-        document.getElementById('sttAvailStatus').style.color = '#e65100';
-      }
-    }
 
     mediaRecorder.start();
     document.getElementById('recordStatus').textContent = '正在录制...';
     document.getElementById('recordBtn').textContent = '停止录制';
     document.getElementById('recordBtn').className = 'timer-btn stop';
     document.getElementById('recordDuration').textContent = '00:00';
-    document.getElementById('recordLiveText').style.display = 'none';
-    document.getElementById('recordLiveText').textContent = '';
   }).catch(err => {
     showToast('无法访问麦克风：' + err.message);
   });
@@ -1060,31 +973,121 @@ function downloadRecord(id) {
 function deleteRecord(id) {
   recordBlobs = recordBlobs.filter(x => x.id !== id);
   renderRecordList();
-  renderSttList();
 }
 
-// ===== 转文字（录音文字记录） =====
-function renderSttList() {
-  const list = document.getElementById('sttList');
-  if (recordBlobs.length === 0) {
-    list.innerHTML = '<div class="empty-hint" style="padding:20px;">暂无录音文字记录<br>在「录制」页录制音频后会自动显示</div>';
+// ===== 语音转文字 =====
+let sttRecRunning = false;
+let sttRecRecognition = null;
+let sttRecTranscript = '';
+
+function getSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return null;
+  return new SpeechRecognition();
+}
+
+function toggleSttRecord() {
+  if (sttRecRunning) {
+    sttRecRunning = false;
+    if (sttRecRecognition) { try { sttRecRecognition.stop(); } catch(e) {} }
+    document.getElementById('sttStatus').textContent = '实时语音转文字';
+    document.getElementById('sttStatus').style.color = '';
+    document.getElementById('sttRecordBtn').textContent = '开始转文字';
+    document.getElementById('sttRecordBtn').className = 'timer-btn start';
+    if (sttRecTranscript.trim()) {
+      state.sttRecords.push({ id: Date.now(), text: sttRecTranscript.trim(), date: new Date().toLocaleString('zh-CN') });
+      saveState();
+      renderSttRecords();
+      showToast('已保存转文字记录');
+    }
     return;
   }
-  const sorted = [...recordBlobs].sort((a, b) => b.id - a.id);
+  const SR = getSpeechRecognition();
+  if (!SR) {
+    document.getElementById('sttStatus').textContent = '当前浏览器不支持语音识别（需 Chrome/Edge）';
+    document.getElementById('sttStatus').style.color = '#e65100';
+    return;
+  }
+  sttRecRecognition = SR;
+  sttRecRecognition.lang = 'zh-CN';
+  sttRecRecognition.continuous = true;
+  sttRecRecognition.interimResults = true;
+  sttRecTranscript = '';
+
+  sttRecRecognition.onresult = e => {
+    let interim = '';
+    let final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    if (final) sttRecTranscript += final;
+    const el = document.getElementById('sttLiveText');
+    el.style.display = 'block';
+    el.innerHTML = escapeHtml(sttRecTranscript) +
+      (interim ? '<span style="color:#bbb;"> ' + escapeHtml(interim) + '</span>' : '');
+  };
+
+  sttRecRecognition.onerror = e => {
+    if (e.error === 'not-allowed') {
+      document.getElementById('sttStatus').textContent = '语音识别被禁止：请检查浏览器麦克风权限';
+      document.getElementById('sttStatus').style.color = '#e65100';
+      sttRecRunning = false;
+      document.getElementById('sttRecordBtn').textContent = '开始转文字';
+      document.getElementById('sttRecordBtn').className = 'timer-btn start';
+    } else if (e.error !== 'no-speech') {
+      document.getElementById('sttStatus').textContent = '语音识别出错：' + e.error;
+      document.getElementById('sttStatus').style.color = '#e65100';
+    }
+  };
+
+  sttRecRecognition.onend = () => {
+    if (sttRecRunning) {
+      try { sttRecRecognition.start(); } catch(e) {}
+    }
+  };
+
+  try {
+    sttRecRecognition.start();
+    sttRecRunning = true;
+    document.getElementById('sttStatus').textContent = '正在识别，请说话...';
+    document.getElementById('sttStatus').style.color = '';
+    document.getElementById('sttRecordBtn').textContent = '停止转文字';
+    document.getElementById('sttRecordBtn').className = 'timer-btn stop';
+    document.getElementById('sttLiveText').style.display = 'block';
+    document.getElementById('sttLiveText').textContent = '';
+  } catch(e) {
+    document.getElementById('sttStatus').textContent = '语音识别启动失败：' + e.message;
+    document.getElementById('sttStatus').style.color = '#e65100';
+  }
+}
+
+function renderSttRecords() {
+  const list = document.getElementById('sttList');
+  if (!state.sttRecords || state.sttRecords.length === 0) {
+    list.innerHTML = '<div class="empty-hint" style="padding:20px;">暂无转文字记录<br>点击上方按钮开始识别</div>';
+    return;
+  }
+  const sorted = [...state.sttRecords].sort((a, b) => b.id - a.id);
   list.innerHTML = sorted.map((r, i) => `
     <div class="record-item" style="flex-direction:column;align-items:flex-start;gap:6px;">
       <div style="display:flex;align-items:center;gap:8px;width:100%;">
-        <span style="font-size:13px;font-weight:600;color:#333;">录音 ${sorted.length - i}</span>
-        <span style="font-size:12px;color:#888;">${r.time} · ${fmtDuration(r.duration)}</span>
+        <span style="font-size:13px;font-weight:600;color:#333;">记录 ${sorted.length - i}</span>
+        <span style="font-size:12px;color:#888;">${r.date}</span>
         <span style="flex:1;"></span>
-        <span class="rec-del" onclick="deleteRecord(${r.id})" style="font-size:18px;">&times;</span>
+        <span class="rec-del" onclick="deleteSttRecord(${r.id})" style="font-size:18px;">&times;</span>
       </div>
-      <audio controls src="${r.url}" style="width:100%;"></audio>
       <div style="font-size:13px;line-height:1.6;color:#555;background:#f9f9f9;border-radius:6px;padding:8px 10px;width:100%;">
-        ${r.text ? escapeHtml(r.text) : '<span style="color:#bbb;">未识别到文字</span>'}
+        ${escapeHtml(r.text)}
       </div>
     </div>
   `).join('');
+}
+
+function deleteSttRecord(id) {
+  state.sttRecords = state.sttRecords.filter(x => x.id !== id);
+  saveState();
+  renderSttRecords();
 }
 
 // ===== 进度页 =====
@@ -1360,11 +1363,8 @@ function downloadTextFile(content, filename) {
 }
 
 // ===== 初始化 =====
-checkSpeechApi();
 loadState();
 renderToday();
-// 等DOM就绪后更新语音识别状态
-setTimeout(updateSttAvailStatus, 100);
 </script>
 </body>
 </html>
