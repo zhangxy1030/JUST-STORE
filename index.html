@@ -360,6 +360,49 @@
     transition: all 0.2s;
   }
   .ins-edit:hover { background: #576b95; color: #fff; }
+  .source-select-wrap {
+    display: flex;
+    gap: 6px;
+    flex: 1;
+  }
+  .source-select-wrap select {
+    flex: 1;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .source-select-wrap select:focus { outline: none; border-color: #07c160; }
+  .btn-add-source {
+    width: 36px;
+    border: 1px solid #07c160;
+    background: #fff;
+    color: #07c160;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    line-height: 1;
+  }
+  .btn-add-source:hover { background: #07c160; color: #fff; }
+  .ins-filter-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin: 4px 0 8px;
+  }
+  .ins-filter-bar select {
+    flex: 1;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff;
+  }
+  .ins-filter-bar select:focus { outline: none; border-color: #07c160; }
   .empty-hint {
     text-align: center;
     padding: 40px 20px;
@@ -646,8 +689,19 @@
         <option value="expression">好表达</option>
         <option value="spark">自己的火花</option>
       </select>
-      <input type="text" id="insSource" placeholder="来源（播客名/书名）">
-      <input type="number" id="insDay" min="1" max="21" placeholder="Day">
+      <div class="source-select-wrap">
+        <select id="insSource">
+          <option value="">选择来源</option>
+        </select>
+        <button class="btn-add-source" onclick="showAddSource()">+</button>
+      </div>
+    </div>
+    <div id="addSourceBox" style="display:none;margin-bottom:8px;">
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="newSourceInput" placeholder="输入新来源名称" style="flex:1;border:1px solid #e0e0e0;border-radius:8px;padding:8px 10px;font-size:14px;">
+        <button class="btn-primary" onclick="addSource()" style="width:auto;padding:8px 16px;">添加</button>
+        <button class="btn-cancel" onclick="hideAddSource()" style="width:auto;padding:8px 16px;">取消</button>
+      </div>
     </div>
     <textarea id="insContent" placeholder="记下触动你的内容..."></textarea>
     <div style="display:flex;gap:8px;">
@@ -656,10 +710,19 @@
     </div>
   </div>
 
-  <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 8px;">
-    <div style="font-size:14px;font-weight:600;color:#666;" id="insCount"></div>
+  <div class="ins-filter-bar">
+    <select id="filterType" onchange="renderInspirations()">
+      <option value="">全部类型</option>
+      <option value="opinion">好观点</option>
+      <option value="expression">好表达</option>
+      <option value="spark">自己的火花</option>
+    </select>
+    <select id="filterSource" onchange="renderInspirations()">
+      <option value="">全部来源</option>
+    </select>
     <button class="btn-download" id="downloadAllBtn" onclick="downloadAllInspirations()">⬇ 全部下载</button>
   </div>
+  <div style="font-size:14px;font-weight:600;color:#666;margin:4px 0 8px;" id="insCount"></div>
   <div id="inspirationList">
     <!-- 动态渲染 -->
   </div>
@@ -727,8 +790,9 @@ const STORAGE_KEY = 'expression_system_v1';
 let state = {
   currentDay: 1,
   checkins: {}, // { dayNum: { taskId: true/false } }
-  inspirations: [], // [{ id, type, content, source, day, date }]
-  sttRecords: [] // [{ id, text, date }]
+  inspirations: [], // [{ id, type, typeLabel, content, source, date }]
+  sttRecords: [], // [{ id, text, date }]
+  insSources: [] // ["来源1", "来源2", ...]
 };
 
 function loadState() {
@@ -760,7 +824,11 @@ function switchTab(name) {
   document.getElementById('pageTitle').textContent = titleMap[name];
   
   if (name === 'progress') renderProgress();
-  if (name === 'inspiration') renderInspirations();
+  if (name === 'inspiration') {
+    updateSourceSelect();
+    updateFilterSource();
+    renderInspirations();
+  }
 }
 
 // ===== Day 切换 =====
@@ -1191,16 +1259,22 @@ let editingInsId = null;
 function addInspiration() {
   const type = document.getElementById('insType').value;
   const source = document.getElementById('insSource').value.trim();
-  const day = document.getElementById('insDay').value || state.currentDay;
   const content = document.getElementById('insContent').value.trim();
-  
+
   if (!content) {
     showToast('请输入内容');
     return;
   }
-  
+
   const typeMap = { opinion: '好观点', expression: '好表达', spark: '自己的火花' };
-  
+
+  // 自动把新来源加入列表
+  if (source && !state.insSources.includes(source)) {
+    state.insSources.push(source);
+    updateSourceSelect();
+    updateFilterSource();
+  }
+
   // 编辑模式：更新已有记录
   if (editingInsId !== null) {
     const ins = state.inspirations.find(i => i.id === editingInsId);
@@ -1209,7 +1283,6 @@ function addInspiration() {
       ins.typeLabel = typeMap[type];
       ins.content = content;
       ins.source = source || '未标注';
-      ins.day = day;
     }
     saveState();
     exitEditMode();
@@ -1217,7 +1290,7 @@ function addInspiration() {
     showToast('已保存修改 ✓');
     return;
   }
-  
+
   // 新增模式
   state.inspirations.push({
     id: Date.now(),
@@ -1225,15 +1298,11 @@ function addInspiration() {
     typeLabel: typeMap[type],
     content: content,
     source: source || '未标注',
-    day: day,
     date: new Date().toLocaleDateString('zh-CN')
   });
-  
+
   saveState();
-  
-  // 清空输入
   clearInsForm();
-  
   renderInspirations();
   showToast('已添加到灵感库 ✓');
 }
@@ -1241,7 +1310,6 @@ function addInspiration() {
 function clearInsForm() {
   document.getElementById('insContent').value = '';
   document.getElementById('insSource').value = '';
-  document.getElementById('insDay').value = '';
 }
 
 function exitEditMode() {
@@ -1257,7 +1325,6 @@ function editInspiration(id) {
   editingInsId = id;
   document.getElementById('insType').value = ins.type;
   document.getElementById('insSource').value = ins.source === '未标注' ? '' : ins.source;
-  document.getElementById('insDay').value = ins.day;
   document.getElementById('insContent').value = ins.content;
   document.getElementById('insSubmitBtn').textContent = '保存修改';
   document.getElementById('insCancelBtn').style.display = '';
@@ -1278,30 +1345,77 @@ function deleteInspiration(id) {
   showToast('已删除');
 }
 
+// 来源管理
+function showAddSource() {
+  document.getElementById('addSourceBox').style.display = 'block';
+  document.getElementById('newSourceInput').value = '';
+  document.getElementById('newSourceInput').focus();
+}
+
+function hideAddSource() {
+  document.getElementById('addSourceBox').style.display = 'none';
+  document.getElementById('newSourceInput').value = '';
+}
+
+function addSource() {
+  const val = document.getElementById('newSourceInput').value.trim();
+  if (!val) { showToast('请输入来源名称'); return; }
+  if (state.insSources.includes(val)) { showToast('该来源已存在'); return; }
+  state.insSources.push(val);
+  saveState();
+  updateSourceSelect();
+  updateFilterSource();
+  document.getElementById('insSource').value = val;
+  hideAddSource();
+  showToast('已添加来源：' + val);
+}
+
+function updateSourceSelect() {
+  const sel = document.getElementById('insSource');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">选择来源</option>' +
+    state.insSources.map(s => '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>').join('');
+  if (state.insSources.includes(current)) sel.value = current;
+}
+
+function updateFilterSource() {
+  const sel = document.getElementById('filterSource');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">全部来源</option>' +
+    state.insSources.map(s => '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>').join('');
+  if (state.insSources.includes(current)) sel.value = current;
+}
+
 function renderInspirations() {
   const list = document.getElementById('inspirationList');
   const count = document.getElementById('insCount');
-  
-  if (state.inspirations.length === 0) {
+  const filterType = document.getElementById('filterType').value;
+  const filterSource = document.getElementById('filterSource').value;
+
+  let filtered = state.inspirations;
+  if (filterType) filtered = filtered.filter(i => i.type === filterType);
+  if (filterSource) filtered = filtered.filter(i => i.source === filterSource);
+
+  if (filtered.length === 0) {
     count.textContent = '';
     document.getElementById('downloadAllBtn').style.display = 'none';
-    list.innerHTML = '<div class="empty-hint">还没有记录灵感<br>Round 2（Day 15）开始使用</div>';
+    list.innerHTML = '<div class="empty-hint">还没有记录灵感<br>点击上方「记录灵感」开始添加</div>';
     return;
   }
-  
+
   document.getElementById('downloadAllBtn').style.display = '';
-  count.textContent = '共 ' + state.inspirations.length + ' 条灵感';
-  
-  // 按Day倒序
-  const sorted = [...state.inspirations].sort((a, b) => b.day - a.day);
-  
+  count.textContent = '共 ' + filtered.length + ' 条灵感';
+
+  // 按时间倒序
+  const sorted = [...filtered].sort((a, b) => b.id - a.id);
+
   list.innerHTML = sorted.map(ins => `
     <div class="inspiration-item">
       <span class="ins-del" onclick="deleteInspiration(${ins.id})">&times;</span>
       <span class="ins-type ${ins.type}">${ins.typeLabel}</span>
       <div class="ins-content">${escapeHtml(ins.content)}</div>
       <div class="ins-meta">
-        <span>Day ${ins.day} · ${escapeHtml(ins.source)}</span>
+        <span>${escapeHtml(ins.source)}</span>
         <span>${ins.date}</span>
       </div>
       <div class="ins-actions">
@@ -1323,8 +1437,8 @@ function downloadOneInspiration(id) {
   const ins = state.inspirations.find(i => i.id === id);
   if (!ins) return;
   downloadTextFile(
-    ins.typeLabel + '（Day ' + ins.day + ' · ' + ins.source + '）\n' + ins.content,
-    '灵感_' + ins.typeLabel + '_Day' + ins.day + '.txt'
+    ins.typeLabel + '（' + ins.source + '）\n' + ins.content,
+    '灵感_' + ins.typeLabel + '_' + ins.date + '.txt'
   );
 }
 
@@ -1333,14 +1447,13 @@ function downloadAllInspirations() {
     showToast('暂无灵感记录');
     return;
   }
-  const sorted = [...state.inspirations].sort((a, b) => a.day - b.day);
+  const sorted = [...state.inspirations].sort((a, b) => b.id - a.id);
   let content = '【21天表达系统 · 灵感库导出】\n';
   content += '共 ' + sorted.length + ' 条记录，导出时间：' + new Date().toLocaleString('zh-CN') + '\n';
   content += '='.repeat(40) + '\n\n';
-  
+
   sorted.forEach((ins, i) => {
-    content += (i + 1) + '. [' + ins.typeLabel + '] Day ' + ins.day + '\n';
-    content += '   来源：' + ins.source + '\n';
+    content += (i + 1) + '. [' + ins.typeLabel + '] ' + ins.source + '\n';
     content += '   记录时间：' + ins.date + '\n';
     content += '   内容：' + ins.content + '\n\n';
   });
